@@ -7,7 +7,7 @@ that will be supplied to the template for generating the table. """
 import csv
 
 def username():
-    return 'gburdell3'
+    return 'sdiep6'
 
 def data_wrangling():
     with open('data/movies.csv', 'r', encoding='utf-8') as f:
@@ -15,7 +15,7 @@ def data_wrangling():
         table = list()
         # Feel free to add any additional variables
         ...
-        
+        count = 0
         # Read in the header
         for header in reader:
             break
@@ -25,10 +25,13 @@ def data_wrangling():
             table.append(row)
             
             # Only read first 100 data rows - [2 points] Q5.4.a
-            ...
+            count +=1
+            if count == 100:
+                break
         
         # Order table by the last column - [3 points] Q5.4.b
-        ...
+        table.sort(reverse = True, key = lambda x:float(x[2]) )
+        print(len(table))
     
     return header, table
 

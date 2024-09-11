@@ -1,7 +1,7 @@
 import http.client
 import json
 import csv
-
+import requests
 
 #############################################################################################################################
 # cse6242 
@@ -61,9 +61,9 @@ class Graph:
         add a tuple (id, name) representing a node to self.nodes if it does not already exist
         The graph should not contain any duplicate nodes
         """
-        if not (id, name) in self.nodes:
+        if (id, name) not in self.nodes:
             self.nodes.append((id, name))
-        #return NotImplemented
+       
 
 
     def add_edge(self, source: str, target: str) -> None:
@@ -73,9 +73,9 @@ class Graph:
         Where 'source' is the id of the source node and 'target' is the id of the target node
         e.g., for two nodes with ids 'a' and 'b' respectively, add the tuple ('a', 'b') to self.edges
         """
-        if not (source, target) in self.edges or not (target, source) in self.edges:
+        if (source, target) not in self.edges and (target, source) in self.edges:
             self.edges.append((source,target))
-        #return NotImplemented
+        
 
 
     def total_nodes(self) -> int:
@@ -107,7 +107,10 @@ class Graph:
             else:
                 degree_nodes[edge[0]] += 1
 
-        return max(degree_nodes)
+        max_degree =  max(degree_nodes.values(), default = 0)
+        max_degree_nodes = {node: degree for node, degree in degree_nodes.items() if degree == max_degree}
+
+        return max_degree_nodes
 
 
     def print_nodes(self):
@@ -181,8 +184,10 @@ class  TMDBAPIUtils:
             e.g., if exclude_ids are [353, 455] then exclude these from any result.
         :param integer limit: maximum number of returned cast members by their 'order' attribute
             e.g., limit=5 will attempt to return the 5 cast members having 'order' attribute values between 0-4
-            If after excluding, there are fewer cast members than the specified limit, then return the remaining members (excluding the ones whose order values are outside the limit range). 
-            If cast members with 'order' attribute in the specified limit range have been excluded, do not include more cast members to reach the limit.
+            If after excluding, there are fewer cast members than the specified limit, then return 
+            the remaining members (excluding the ones whose order values are outside the limit range). 
+            If cast members with 'order' attribute in the specified limit range have been excluded,
+             do not include more cast members to reach the limit.
             If after excluding, the limit is not specified, then return all remaining cast members."
             e.g., if limit=5 and the actor whose id corresponds to cast member with order=1 is to be excluded,
             return cast members with order values [0, 2, 3, 4], not [0, 2, 3, 4, 5]
@@ -191,10 +196,50 @@ class  TMDBAPIUtils:
                 [{'id': '97909' # the id of the cast member
                 'character': 'John Doe' # the name of the character played
                 'credit_id': '52fe4249c3a36847f8012927' # id of the credit, ...}, ... ]
-                Note that this is an example of the structure of the list and some of the fields returned by the API.
+                Note that this is an example of the structure of the list and some of the fields 
+                returned by the API.
                 The result of the API call will include many more fields for each cast member.
         """
-        return NotImplemented
+        url = f'https://api.themoviedb.org/3/movie/{movie_id}/credits?language=en-US'
+
+        headers = {"accept": "application/json",
+                   "Authorization": self.api_key
+                   }
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if exclude_ids is None:
+                exclude_ids = []
+            
+            cast_list = data.get('cast', [])
+
+            filtered_cast_list = [member for member in cast_list if member['id'] not in exclude_ids]
+
+            if limit is not None:
+                filtered_cast_list.sort(key=lambda x: x['order'])                
+                filtered_cast_list = [member for member in filtered_cast_list if member['order'] < limit]
+                if len(filtered_cast_list) > limit:
+                    filtered_cast_list = filtered_cast_list[:limit]
+                
+            cast_members = [
+            {
+                'id': member['id'],
+                'character': member['character'],
+                'credit_id': member['credit_id'],
+                'name': member['name'],  # Optional: You can include other fields if needed
+                'order': member['order']  # Optional: Include the order field for clarity
+            }
+            for member in filtered_cast_list
+            ]
+        
+            return cast_members
+        except requests.exceptions.RequestException as e:
+            return f'Error: {e}'
+        
+        
 
 
     def get_movie_credits_for_person(self, person_id:str, vote_avg_threshold:float=None)->list:
@@ -213,7 +258,31 @@ class  TMDBAPIUtils:
                 'title': 'Long, Stock and Two Smoking Barrels' # the title (not original title) of the credit
                 'vote_avg': 5.0 # the float value of the vote average value for the credit}, ... ]
         """
-        return NotImplemented
+        
+        url = f"https://api.themoviedb.org/3/person/{person_id}/movie_credits?language=en-US"
+
+        headers = {"accept": "application/json",
+                   "Authorization": self.api_key
+                   }
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+
+            data = response.json()
+
+            movies = data.get('cast', [])
+
+            movie_credits = [
+                { 'id' : movie['id'],
+                 'title' : movie['title'],
+                 'vote_ave' : movie['vote_average']
+                }
+                for movie in movies if vote_avg_threshold is None or movie['vote_average'] >= vote_avg_threshold
+            ]
+                    
+            return movie_credits
+        except requests.exceptions.RequestException as e:
+            return f'Error: {e}'
 
 
 #############################################################################################################################
@@ -328,7 +397,8 @@ if __name__ == "__main__":
 
     graph = Graph()
     graph.add_node(id='2975', name='Laurence Fishburne')
-    tmdb_api_utils = TMDBAPIUtils(api_key='<your API key>')
+    tmdb_api_utils = TMDBAPIUtils(api_key='Bearer f7d63fabd5c584abe135e8f78a05a04e')
+    
 
     # call functions or place code here to build graph (graph building code not graded)
     # Suggestion: code should contain steps outlined above in BUILD CO-ACTOR NETWORK
